@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "50mb", "runtime": "python3.11" }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ],
+  "env": {
+    "MONGO_URI": "mongodb+srv://shaikabdulrahiman:BITTU@abdul.phqgiob.mongodb.net/?retryWrites=true&w=majority&appName=abdul",
+    "SECRET_KEY": "your-secret-key-here",
+    "COHERE_API_KEY": "FPU8pDfsre9OYF0uk7JYi7stsPIAhUNS7zhXydJF",
+    "ADMIN_PASSWORD": "admin123"
+  }
+}
