@@ -1,0 +1,138 @@
+{% extends 'layout.html' %}
+
+{% block title %}Chat - BlogSphere{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto bg-white rounded-lg shadow p-6">
+    <h2 class="text-2xl font-semibold mb-4">Site Chat Assistant</h2>
+    <p class="text-sm text-gray-600 mb-4">Ask about content on this site. The assistant will only use information from this website.</p>
+    <div class="mb-4 flex space-x-2">
+        <select id="actionSelect" class="border rounded px-3 py-2">
+            <option value="ask">Ask</option>
+            <option value="suggest_titles">Suggest Titles</option>
+            <option value="generate_blog">Generate Blog</option>
+            <!-- <option value="summarize">Summarize</option>
+            <option value="expand">Expand</option>
+            <option value="edit">Edit</option> -->
+        </select>
+        <select id="categorySelect" class="border rounded px-3 py-2">
+            <option value="">--Category (optional)--</option>
+            {% for cat in categories %}
+                <option value="{{ cat.name }}">{{ cat.name }}</option>
+            {% endfor %}
+        </select>
+        <input id="titleInput" placeholder="Title (for generate/summarize)" class="border rounded px-3 py-2" />
+    </div>
+
+    <div id="chatBox" class="h-64 overflow-y-auto border rounded p-4 mb-4 bg-gray-50">
+        <!-- messages will appear here -->
+    </div>
+
+    <textarea id="contentInput" placeholder="Optional content (for edit/expand/summarize)." class="w-full border rounded px-3 py-2 mb-2 hidden" rows="6"></textarea>
+
+    <form id="chatForm" class="flex space-x-2">
+        <input id="userInput" type="text" placeholder="Ask a question about this site..." class="flex-grow border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-300" />
+        <button type="submit" class="bg-primary-600 text-white px-4 py-2 rounded">Send</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const chatBox = document.getElementById('chatBox');
+const chatForm = document.getElementById('chatForm');
+const userInput = document.getElementById('userInput');
+const actionSelect = document.getElementById('actionSelect');
+const categorySelect = document.getElementById('categorySelect');
+const titleInput = document.getElementById('titleInput');
+const contentInput = document.getElementById('contentInput');
+
+function appendMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = role === 'user' ? 'text-right mb-3' : 'text-left mb-3';
+    div.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 ${role === 'user' ? 'bg-primary-600 text-white' : 'bg-white text-gray-900 border'}">${text}</div>`;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = userInput.value.trim();
+    if (!text) return;
+    appendMessage('user', text);
+    userInput.value = '';
+    const action = actionSelect.value;
+    const category = categorySelect.value;
+    const title = titleInput.value.trim();
+    const content = contentInput.value.trim();
+
+    appendMessage('assistant', '...');
+    const assistantBubble = chatBox.lastChild;
+
+    try {
+        // If user chose Generate Blog and didn't fill the Title field, use the main input as the title.
+        let payloadTitle = title;
+        let payloadQuestion = text;
+        if (action === 'generate_blog') {
+            if (!payloadTitle && payloadQuestion) {
+                payloadTitle = payloadQuestion;
+                payloadQuestion = '';
+            }
+        }
+
+        const res = await fetch("{{ url_for('api_chat') }}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: action, question: payloadQuestion, category: category, title: payloadTitle, content: content })
+        });
+
+        let data;
+        try {
+            data = await res.json();
+        } catch (parseErr) {
+            assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-red-50 text-red-800 border">Error: Invalid JSON response</div>`;
+            return;
+        }
+
+        if (res.ok) {
+            if (data.answer) {
+                assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-white text-gray-900 border">${data.answer}</div>`;
+            } else if (data.error) {
+                assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-red-50 text-red-800 border">Error: ${data.error}</div>`;
+            } else {
+                assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-yellow-50 text-yellow-800 border">No answer returned by the server.</div>`;
+            }
+        } else {
+            // Non-2xx status
+            const msg = data && data.error ? data.error : `Server returned status ${res.status}`;
+            assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-red-50 text-red-800 border">Error: ${msg}</div>`;
+        }
+    } catch (err) {
+        assistantBubble.innerHTML = `<div class="inline-block rounded-lg px-3 py-2 bg-red-50 text-red-800 border">Error: ${err.message}</div>`;
+    }
+});
+
+// Update UI when action changes
+function updateActionUI() {
+    const a = actionSelect.value;
+    if (a === 'summarize' || a === 'expand' || a === 'edit') {
+        contentInput.classList.remove('hidden');
+        titleInput.classList.remove('hidden');
+        userInput.placeholder = a === 'edit' ? 'Edit instructions (e.g. Improve clarity)...' : 'Optional short prompt...';
+    } else if (a === 'generate_blog') {
+        contentInput.classList.add('hidden');
+        titleInput.classList.remove('hidden');
+        userInput.placeholder = 'Enter a title here (or fill the Title field)';
+        titleInput.placeholder = 'Title for the new blog (or leave blank to use the main input)';
+    } else {
+        contentInput.classList.add('hidden');
+        titleInput.classList.remove('hidden');
+        userInput.placeholder = 'Ask a question about this site...';
+        titleInput.placeholder = 'Title (for generate/summarize)';
+    }
+}
+
+actionSelect.addEventListener('change', updateActionUI);
+updateActionUI();
+</script>
+{% endblock %}
